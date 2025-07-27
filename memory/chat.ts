@@ -7,24 +7,54 @@ const db = new Database(import.meta.dir + "/april.db");
 console.log("💾 connected db : ", import.meta.dir + "/april.db");
 
 
-export function storeMessage(chat_id: number, role: ChatRole, content: string) {
+/* export function storeMessage(chat_id: number, role: ChatRole, content: string) {
     console.log("storing messages : ", {chat_id, role, content});
     db.run(
         `INSERT INTO chat_history (chat_id, role, content) VALUES (?, ?, ?)`,
         [String(chat_id), role, content]
     );
+} */
+
+export async function getChatHistory(limit : number, role? : ChatRole) : Promise<History[]> {
+    if(role) {
+        const history : History[] = getRecentMessages(limit, role);
+        return history;
+    }
+    const history : History[] = getRecentMessages(limit);
+    return history;
 }
 
 
-export function getRecentMessages(chat_id: string, limit = 10) : History[] {
+export async function getChatHistoryWithVectorSimilarity(chat_id : string, compared_data : string, length : number) : Promise<History[]> {
+    const similar : History[] = await recallTopSimilar(chat_id, compared_data);
+    const history : History[] = getRecentMessages(length);
+    const mergedHistory : History[] = [...similar, ...history];
+    return mergedHistory;
+
+}
+
+
+export function getRecentMessages(limit = 10, role? : ChatRole) : History[] {
+    if(role) {
+        const result = db.prepare(`
+              SELECT *
+              FROM chat_history
+              WHERE role = ?
+              ORDER BY created_at DESC
+              LIMIT ?;
+              `)
+        .all(role, limit) as History[];
+        console.log("recent messages", result);
+        return result;
+    }
     const result = db.prepare(`
-          SELECT id, role, content
+          SELECT id, chat_id, content, created_at, tokens_input, tokens_output, cost_usd, model, is_simulated
           FROM chat_history
-          WHERE chat_id = ?
           ORDER BY created_at DESC
-          LIMIT ?
+          LIMIT ?;
           `)
-    .all(String(chat_id), limit) as History[];
+    .all(limit) as History[];
+    console.log("recent messages", result);
     return result;
 }
 
@@ -45,7 +75,7 @@ export async function saveToChatHistory(entry: {
         try {
             const vec = await generateEmbedding(entry.content);
             vector = JSON.stringify(vec);
-            console.log(`🧬 embedded vector dim = ${vec.length}`);
+            // console.log(`🧬 embedded vector dim = ${vec.length}`);
         } catch (err) {
             console.warn("⚠️ Failed to generate embedding:", err);
         }
@@ -71,11 +101,3 @@ export async function saveToChatHistory(entry: {
 }
 
 
-export async function getChatHistory(chat_id : string, user_msg : string) : Promise<History[]> {
-    const similar : History[] = await recallTopSimilar(chat_id, user_msg);
-    const history : History[] = getRecentMessages(chat_id, 10);
-    const mergedHistory : History[] = [...similar, ...history]; // optional dedupe
-    // console.log("recalling top similar : ", mergedHistory);
-    return mergedHistory;
-
-}

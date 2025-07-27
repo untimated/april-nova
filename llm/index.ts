@@ -4,6 +4,7 @@ import { MODEL_BACKEND } from "../config/env";
 import { readFileSync } from "fs";
 import { join } from "path";
 import type { LLMReplyResult, OpenAIMessage, History} from "../types"
+import {customDateNow} from "../utils";
 
 const soulseedPath = join(import.meta.dir, "../memory/soulseed/soulseed_extended.md");
 const soulseed = readFileSync(soulseedPath, "utf-8");
@@ -39,7 +40,7 @@ export async function generateReply(
 }
 
 
-// function buildPrompt(history: { role: string, content: string }[], user_msg: string) {
+// [DEPRECATED] for llama
 function buildPrompt(history: History[], user_msg: string, inject_soul: boolean) {
     let prompt = `You are April. Talk naturally and casually.\n\n`;
 
@@ -67,11 +68,11 @@ function buildPromptJSON(history: History[], user_msg: string, inject_soul: bool
     // 2. Prior conversation history (chronologically)
     for (const msg of [...history].reverse()) {
         const role = msg.role === "user" ? "user" : "assistant";
-        messages.push({ role: role, content: msg.content });
+        messages.push({ role: role, content: `Date : ${msg.created_at} - ${msg.content}`, timestamp : msg.created_at });
     }
 
     // 3. Current user message
-    messages.push({ role: "user", content: user_msg });
+    messages.push({ role: "user", content: `Now is ${customDateNow()} - ${user_msg}`, timestamp: customDateNow() });
 
     console.log(messages);
     return messages;

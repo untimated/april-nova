@@ -1,18 +1,19 @@
 import { MODEL_BACKEND, TELEGRAM_TOKEN } from "../config/env";
 import { get, set } from "../memory/sqlite";
 import type {TelegramUpdateResponse} from "../types";
-import { saveToChatHistory, getChatHistory } from "../memory/chat";
+import { saveToChatHistory, getChatHistory, getChatHistoryWithVectorSimilarity } from "../memory/chat";
 import { generateReply } from "../llm";
 import { handleCommand } from "./command"
-import './types'
+import '../types'
 
 const api = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 let last_id = Number(get("last_id") ?? 0);
-
+let last_chat_id = Number(get("last_chat_id") ?? 0);
+console.log({last_id, last_chat_id});
 
 /*
- * Core Logic Here
- **/
+ * Core Logic
+ * */
 export async function startPolling() {
     while (true) {
         try {
@@ -24,6 +25,7 @@ export async function startPolling() {
                     last_id = update.update_id;
                     handleOne(update);
                     set("last_id", String(last_id));
+                    set("last_chat_id", String(last_chat_id));
                 }
             }
 
@@ -42,11 +44,12 @@ async function handleOne(update: any) {
 
         const chat_id = msg.chat.id;
         const user_msg = msg.text;
+        last_chat_id = chat_id;
 
     try {
         if(await handleCommand(chat_id, user_msg)) return;
 
-        const history = await getChatHistory(chat_id, user_msg);
+        const history = await getChatHistoryWithVectorSimilarity(chat_id, user_msg, 10);
 
         await sendTypingAction(chat_id);
         const replyResult = await generateReply(history, user_msg, true);
@@ -110,15 +113,11 @@ function convertToTelegramHTML(text: string): string {
 
 
 export async function sendMessage(chat_id : string, reply : string) {
-    const reply_formmated = convertToTelegramHTML(reply);
-    console.log({reply_formmated});
     await fetch(`${api}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             chat_id,
-            // text: reply_formmated,
-            // parse_mode: "HTML"
             text: reply,
             parse_mode: "Markdown"
         })
@@ -126,4 +125,20 @@ export async function sendMessage(chat_id : string, reply : string) {
 }
 
 
+export async function getLastChatID() {
+    if(last_chat_id === 0) {
+        const res = await fetch(`${api}/getUpdates?timeout=5`);
+        const { ok, result } = await res.json() as TelegramUpdateResponse;
+        console.log({last_id, result});
+        if (ok && result.length) {
+            for (const update of result) {
+                const id = update.message?.chat.id;
+                last_chat_id = id as number;
+                set("last_chat_id", String(id));
+                return id;
+            }
+        }
+    }
+    return last_chat_id;
+}
 

@@ -5,7 +5,7 @@ import type {History} from '../types';
 let embedder: any = null;
 
 
-export function cosineSimilarity(a: number[], b: number[]): number {
+function cosineSimilarity(a: number[], b: number[]): number {
     if(a.length > 0 && b.length > 0) {
         let dot = 0, normA = 0, normB = 0;
         for (let i = 0; i < a.length; i++) {
@@ -46,7 +46,7 @@ export async function recallTopSimilar(chat_id: string, text: string, topN: numb
   const targetVec = await generateEmbedding(text);
 
   const rows = db.prepare(`
-    SELECT id, role, content, vector
+    SELECT *
     FROM chat_history
     WHERE chat_id = ? AND vector IS NOT NULL
   `).all(chat_id) as History[];

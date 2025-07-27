@@ -1,5 +1,8 @@
 /* Types */
 
+
+export type ChatRole = "user" | "assistant";
+
 export type TelegramUpdateResponse = {
     ok: boolean;
     result: {
@@ -30,8 +33,9 @@ export type GeminiError = {
 
 
 export type OpenAIMessage = {
-    role: string,
-    content: string
+    role: ChatRole,
+    content: string,
+    timestamp?: string,
 }
 
 
@@ -51,6 +55,7 @@ export type History = {
     content: string;
     vector?: string;
     score?: number; //appended after calculation
+    created_at: string;
 }
 
-export type ChatRole = "user" | "assistant";
+
