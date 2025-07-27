@@ -3,10 +3,20 @@ import { get, set } from "./memory/sqlite";
 import type {TelegramUpdateResponse} from "./types";
 import { storeMessage, getRecentMessages } from "./memory/chat";
 import { generateReply } from "./llm";
+import { handleCommand } from "./command"
 import './types'
 
 const api = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 let last_id = Number(get("last_id") ?? 0);
+
+
+export async function sendMessage(chat_id : string, reply : string) {
+    await fetch(`${api}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id, text: reply })
+    });
+}
 
 
 export async function startPolling() {
@@ -33,40 +43,27 @@ export async function startPolling() {
 
 
 async function handleOne(update: any) {
-    const msg = update.message;
-    if (!msg?.text) return;
+    try {
+        const msg = update.message;
+        if (!msg?.text) return;
 
-    const chat_id = msg.chat.id;
-    const user_msg = msg.text;
+        const chat_id = msg.chat.id;
+        const user_msg = msg.text;
 
-    // TODO :prioritze command /remember
+        if(await handleCommand(chat_id, user_msg)) return;
 
-    const history = getRecentMessages(chat_id, 10);
-    const prompt = buildPrompt(history, user_msg);
-    await sendTypingAction(chat_id);
-    const reply = await generateReply(prompt);
+        const history = getRecentMessages(chat_id, 10);
+        await sendTypingAction(chat_id);
+        const reply = await generateReply(history, user_msg);
 
-    storeMessage(chat_id, "user", user_msg);
-    storeMessage(chat_id, "assistant", reply);
+        storeMessage(chat_id, "user", user_msg);
+        storeMessage(chat_id, "assistant", reply);
 
-    await fetch(`${api}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id, text: reply })
-    });
-}
+        sendMessage(chat_id, reply);
 
-
-function buildPrompt(history: { role: string, content: string }[], user_msg: string) {
-    let prompt = `You are April. Talk naturally and casually.\n\n`;
-
-    for (const msg of history.reverse()) {
-        const speaker = msg.role === "user" ? "User" : "April";
-        prompt += `${speaker}: ${msg.content}\n`;
+    } catch(error) {
+        throw error;
     }
-
-    prompt += `User: ${user_msg}\nApril:`;
-    return prompt;
 }
 
 
@@ -81,6 +78,5 @@ async function sendTypingAction(chat_id: number) {
     });
     console.log("send chat action ", chat_id);
 }
-
 
 

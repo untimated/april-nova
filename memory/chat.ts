@@ -11,12 +11,6 @@ export function storeMessage(chat_id: number, role: ChatRole, content: string) {
         `INSERT INTO chat_history (chat_id, role, content) VALUES (?, ?, ?)`,
         [String(chat_id), role, content]
     );
-    // const result = db.prepare(`
-    //       SELECT *
-    //       FROM chat_history
-    //       `)
-    // .all();
-    // console.log("inserted : ", result);
 }
 
 export function getRecentMessages(chat_id: number, limit = 10) {

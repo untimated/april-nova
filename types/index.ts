@@ -27,3 +27,9 @@ export type GeminiError = {
         status: string
     }
 };
+
+
+export type OpenAIMessage = {
+    role: string,
+    content: string
+}
