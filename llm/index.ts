@@ -1,11 +1,10 @@
 import { generateWithLlama } from "./llama";
 import { generateWithGemini } from "./gemini";
 import { MODEL_BACKEND } from "../config/env";
-import type { OpenAIMessage} from "../types"
+import type { LLMReplyResult, OpenAIMessage} from "../types"
 
 
-// export async function generateReply(prompt: string): Promise<string> {
-export async function generateReply(history: { role: string, content: string }[], user_msg: string) {
+export async function generateReply(history: { role: string, content: string }[], user_msg: string) : Promise< LLMReplyResult > {
     console.log(`MODEL BACKEND : ${MODEL_BACKEND}`);
     switch(MODEL_BACKEND) {
         case "llama" :
@@ -19,7 +18,13 @@ export async function generateReply(history: { role: string, content: string }[]
             return await generateWithGemini(prompt);
         }
         default :
-            return "❌ Unknown model backend";
+            return {
+                reply : "❌ Unknown model backend",
+                tokens_input : 0,
+                tokens_output : 0,
+                model: "llama",
+                cost_usd: 0,
+            };
     }
 }
 

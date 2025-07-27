@@ -1,8 +1,10 @@
 import { GEMINI_API_KEY } from "../config/env";
-import type { GeminiError , GeminiResponse, OpenAIMessage } from "../types"
+import type { GeminiError , GeminiResponse, OpenAIMessage, LLMReplyResult } from "../types"
+import { estimateCost } from "./cost";
 
 
-export async function generateWithGemini(prompt: OpenAIMessage[]): Promise<string> {
+// export async function generateWithGemini(prompt: OpenAIMessage[]): Promise<string> {
+export async function generateWithGemini(prompt: OpenAIMessage[]): Promise<LLMReplyResult> {
 
     const geminiPrompt = convertToGeminiPrompt(prompt);
 
@@ -18,12 +20,29 @@ export async function generateWithGemini(prompt: OpenAIMessage[]): Promise<strin
     if (!res.ok) {
         const err = await res.json() as GeminiError;
         console.error("❌ Gemini API error:", err);
-        return `⚠️ Gemini error: ${err.error?.message ?? "unknown"}`;
+        return {
+            reply: `⚠️ Gemini error: ${err.error?.message ?? "unknown"}`,
+            tokens_input: 0,
+            tokens_output: 0,
+            model: "gemini",
+            cost_usd: 0
+        };
     }
 
     const data = await res.json() as GeminiResponse;
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "…";
 
+    const generated_text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "…";
+
+    const tokens_input = prompt.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0);
+    const tokens_output = Math.ceil(generated_text.length / 4); // approx 4 chars per token
+
+    return {
+        reply: generated_text,
+        tokens_input,
+        tokens_output,
+        model: "gemini",
+        cost_usd: estimateCost("gemini", tokens_input, tokens_output)
+    };
 
 }
 

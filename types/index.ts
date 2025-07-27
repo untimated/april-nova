@@ -33,3 +33,12 @@ export type OpenAIMessage = {
     role: string,
     content: string
 }
+
+
+export type LLMReplyResult = {
+    reply: string;
+    tokens_input: number;
+    tokens_output: number;
+    model: string;
+    cost_usd: number;
+};
