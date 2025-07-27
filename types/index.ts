@@ -42,3 +42,14 @@ export type LLMReplyResult = {
     model: string;
     cost_usd: number;
 };
+
+
+export type History = {
+    id: number;
+    role : string;
+    content: string;
+    vector?: string;
+    score?: number; //appended after calculation
+}
+
+export type ChatRole = "user" | "assistant";

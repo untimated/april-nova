@@ -6,6 +6,7 @@ import type { LLMReplyResult, OpenAIMessage} from "../types"
 
 export async function generateReply(history: { role: string, content: string }[], user_msg: string) : Promise< LLMReplyResult > {
     console.log(`MODEL BACKEND : ${MODEL_BACKEND}`);
+
     switch(MODEL_BACKEND) {
         case "llama" :
         {

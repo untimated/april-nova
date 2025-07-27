@@ -1,7 +1,7 @@
 import { TELEGRAM_TOKEN } from "./config/env";
 import { get, set } from "./memory/sqlite";
 import type {TelegramUpdateResponse} from "./types";
-import { storeMessage, getRecentMessages, saveToChatHistory } from "./memory/chat";
+import { saveToChatHistory, getChatHistory } from "./memory/chat";
 import { generateReply } from "./llm";
 import { handleCommand } from "./command"
 import './types'
@@ -52,10 +52,19 @@ async function handleOne(update: any) {
 
         if(await handleCommand(chat_id, user_msg)) return;
 
-        const history = getRecentMessages(chat_id, 10);
+        const history = await getChatHistory(chat_id, user_msg);
+
         await sendTypingAction(chat_id);
         const replyResult = await generateReply(history, user_msg);
 
+        // save user's chat
+        saveToChatHistory({
+          chat_id,
+          role: "user",
+          content: user_msg,
+        }, true);
+
+        // save april's chat
         saveToChatHistory({
           chat_id,
           role: "assistant",

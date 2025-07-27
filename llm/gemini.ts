@@ -3,7 +3,6 @@ import type { GeminiError , GeminiResponse, OpenAIMessage, LLMReplyResult } from
 import { estimateCost } from "./cost";
 
 
-// export async function generateWithGemini(prompt: OpenAIMessage[]): Promise<string> {
 export async function generateWithGemini(prompt: OpenAIMessage[]): Promise<LLMReplyResult> {
 
     const geminiPrompt = convertToGeminiPrompt(prompt);
