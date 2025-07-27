@@ -37,6 +37,7 @@ export async function saveToChatHistory(entry: {
     tokens_output?: number,
     model?: string,
     cost_usd?: number,
+    is_simulated?: boolean,
 }, skip_embedding : boolean = false) {
 
     let vector: string | null = null;
@@ -53,8 +54,8 @@ export async function saveToChatHistory(entry: {
     db.run(
         `
         INSERT INTO chat_history
-        (chat_id, role, content, tokens_input, tokens_output, model, cost_usd, vector)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        (chat_id, role, content, tokens_input, tokens_output, model, cost_usd, vector, is_simulated)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             entry.chat_id,
             entry.role,
@@ -64,6 +65,7 @@ export async function saveToChatHistory(entry: {
             entry.model ?? null,
             entry.cost_usd ?? null,
             vector,
+            entry.is_simulated ?? 0,
         ]
     );
 }

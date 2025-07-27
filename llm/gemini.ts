@@ -40,7 +40,8 @@ export async function generateWithGemini(prompt: OpenAIMessage[]): Promise<LLMRe
         tokens_input,
         tokens_output,
         model: "gemini",
-        cost_usd: estimateCost("gemini", tokens_input, tokens_output)
+        cost_usd: estimateCost("gemini", tokens_input, tokens_output),
+        is_simulated: true,
     };
 
 }

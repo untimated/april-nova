@@ -41,6 +41,7 @@ export type LLMReplyResult = {
     tokens_output: number;
     model: string;
     cost_usd: number;
+    is_simulated?: boolean;
 };
 
 

@@ -1,7 +1,7 @@
 // commands.ts
 import { sendMessage } from "./telegram";
-import { set } from "./memory/sqlite"; // kamu sesuaikan path-nya
-import { getDB } from "./memory/sqlite";
+import { set } from "../memory/sqlite"; // kamu sesuaikan path-nya
+import { getDB } from "../memory/sqlite";
 
 
 const helpText =`
@@ -47,7 +47,8 @@ export async function handleCommand(chat_id: string, user_msg: string): Promise<
               SELECT
                 SUM(tokens_input) as total_input,
                 SUM(tokens_output) as total_output,
-                SUM(cost_usd) as total_cost
+                SUM(cost_usd) as total_cost,
+                MAX(is_simulated) as is_simulated
               FROM chat_history
               WHERE chat_id = ?
                 AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')
@@ -58,11 +59,14 @@ export async function handleCommand(chat_id: string, user_msg: string): Promise<
             const output = result?.total_output ?? 0;
             const cost = result?.total_cost ?? 0;
 
+            const isSim = !!result?.is_simulated;
+            const costText = `$${cost.toFixed(5)}${isSim ? " (simulated)" : ""}`;
+
             await sendMessage(chat_id,
               `🧾 *Usage this month*\n` +
               `🔠 Input tokens: ${input}\n` +
               `📤 Output tokens: ${output}\n` +
-              `💸 Cost: $${cost.toFixed(5)}`
+              `💸 Cost: $${costText}`
             );
             return true;
         }

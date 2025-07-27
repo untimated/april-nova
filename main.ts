@@ -1,4 +1,4 @@
-import { startPolling } from "./telegram";
+import { startPolling } from "./core/telegram";
 import { preloadEmbeddingModel } from "./llm/embedding";
 
 console.log("🟢 April v2.6 booting...");
