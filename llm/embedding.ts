@@ -41,15 +41,17 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 
-export async function recallTopSimilar(chat_id: string, text: string, topN: number = 3)  : Promise<History[]> {
+export async function recallTopSimilar(text: string, topN: number = 3)  : Promise<History[]> {
   const db = getDB();
   const targetVec = await generateEmbedding(text);
 
   const rows = db.prepare(`
     SELECT *
     FROM chat_history
-    WHERE chat_id = ? AND vector IS NOT NULL
-  `).all(chat_id) as History[];
+    WHERE vector IS NOT NULL
+    ORDER BY created_at ASC
+    LIMIT 4
+  `).all() as History[];
 
   const scored : History[] = rows.map(( row : History ) => {
     try {

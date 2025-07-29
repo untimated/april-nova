@@ -47,21 +47,25 @@ export async function runAgent(fixedDelayMinutes: number = 1) {
 }
 
 function agenticCheckLastMessage(history: History[], minute: number): AgenticAction | null {
+    console.log({minute})
     if (!history || history.length === 0) return null;
 
     const lastMessage = history[history.length - 1];
-    const lastTime = new Date(lastMessage!.created_at).getTime();
+    const lastTime = new Date(lastMessage!.created_at + 'Z').getTime();
     const now = Date.now();
     const silenceMs = now - lastTime;
     const duration = minute * 60 * 1000;
 
     const hasUserLeft = silenceMs > duration;
+    const silenceMin = (silenceMs/(1000 * 60));
 
-    console.log({ hasUserLeft, lastMessage, lastTime, now, silenceMs });
+    console.log({id: lastMessage?.id, created_at: lastMessage?.created_at});
+    console.log({ hasUserLeft, lastTime: new Date(lastTime), now : new Date(now), silenceMs, silenceMin });
+
     if (hasUserLeft) {
         return {
             type: "message_send",
-            payload: `User has been silent for over ${minute} minutes. Consider asking if he's okay.`,
+            payload: `User has been silent for over ${Math.round(silenceMs/(1000 * 60))} minutes. Consider asking if he's okay.`,
                 reason: "user_silent"
         };
     }

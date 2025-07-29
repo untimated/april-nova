@@ -32,11 +32,36 @@ export type GeminiError = {
 };
 
 
+export type OpenAIRequest = {
+    prompt: {
+        id: string;
+        version: string;
+        variables: Record<string, string>;
+    };
+    // input: OpenAISDKMessage[];
+    input: OpenAIMessage[];
+};
+
+
 export type OpenAIMessage = {
     role: ChatRole,
     content: string,
     timestamp?: string,
 }
+
+
+// export type OpenAIMessage = {
+//     role: ChatRole,
+//     content: {type: "input_text", text: string}[],
+// }
+
+// export type OpenAISDKMessage = {
+//   role: ChatRole,
+//   content: {
+//     type: "input_text", // ✅ LITERAL type
+//     text: string,
+//   }[],
+// }
 
 
 export type LLMReplyResult = {

@@ -7,54 +7,33 @@ const db = new Database(import.meta.dir + "/april.db");
 console.log("💾 connected db : ", import.meta.dir + "/april.db");
 
 
-/* export function storeMessage(chat_id: number, role: ChatRole, content: string) {
-    console.log("storing messages : ", {chat_id, role, content});
-    db.run(
-        `INSERT INTO chat_history (chat_id, role, content) VALUES (?, ?, ?)`,
-        [String(chat_id), role, content]
-    );
-} */
-
-export async function getChatHistory(limit : number, role? : ChatRole) : Promise<History[]> {
-    if(role) {
-        const history : History[] = getRecentMessages(limit, role);
-        return history;
-    }
-    const history : History[] = getRecentMessages(limit);
-    return history;
+export async function getChatHistory(limit : number, role? : ChatRole, sort_by = "DESC") : Promise<History[]> {
+    return getMessages(limit, role, sort_by).reverse();
 }
 
 
-export async function getChatHistoryWithVectorSimilarity(chat_id : string, compared_data : string, length : number) : Promise<History[]> {
-    const similar : History[] = await recallTopSimilar(chat_id, compared_data);
-    const history : History[] = getRecentMessages(length);
+export async function getChatHistoryWithVectorSimilarity(compared_data : string, limit : number) : Promise<History[]> {
+    const similar : History[] = await recallTopSimilar(compared_data);
+    const history : History[] = getMessages(limit).reverse();
     const mergedHistory : History[] = [...similar, ...history];
     return mergedHistory;
 
 }
 
 
-export function getRecentMessages(limit = 10, role? : ChatRole) : History[] {
-    if(role) {
-        const result = db.prepare(`
-              SELECT *
-              FROM chat_history
-              WHERE role = ?
-              ORDER BY created_at DESC
-              LIMIT ?;
-              `)
-        .all(role, limit) as History[];
-        console.log("recent messages", result);
-        return result;
+export function getMessages(limit : number, role? : ChatRole, sort_by : string = 'DESC') : History[] {
+    let params : {[key: string] : any }= {
+        ":limit" : limit,
     }
-    const result = db.prepare(`
-          SELECT id, chat_id, content, created_at, tokens_input, tokens_output, cost_usd, model, is_simulated
-          FROM chat_history
-          ORDER BY created_at DESC
-          LIMIT ?;
-          `)
-    .all(limit) as History[];
-    console.log("recent messages", result);
+    if(role) params[":role"] = role;
+    let query = `
+      SELECT *
+      FROM chat_history
+      ${ role ? 'WHERE role = :role' : ''}
+      ORDER BY id ${sort_by}
+      LIMIT :limit;
+    `;
+    const result = db.prepare(query).all(params) as History[];
     return result;
 }
 
@@ -75,7 +54,6 @@ export async function saveToChatHistory(entry: {
         try {
             const vec = await generateEmbedding(entry.content);
             vector = JSON.stringify(vec);
-            // console.log(`🧬 embedded vector dim = ${vec.length}`);
         } catch (err) {
             console.warn("⚠️ Failed to generate embedding:", err);
         }

@@ -1,4 +1,4 @@
-import { MODEL_BACKEND, TELEGRAM_TOKEN } from "../config/env";
+import { MODEL_BACKEND, TELEGRAM_TOKEN, MAX_HISTORY_COUNT } from "../config/env";
 import { get, set } from "../memory/sqlite";
 import type {TelegramUpdateResponse} from "../types";
 import { saveToChatHistory, getChatHistory, getChatHistoryWithVectorSimilarity } from "../memory/chat";
@@ -9,7 +9,6 @@ import '../types'
 const api = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 let last_id = Number(get("last_id") ?? 0);
 let last_chat_id = Number(get("last_chat_id") ?? 0);
-console.log({last_id, last_chat_id});
 
 /*
  * Core Logic
@@ -39,17 +38,17 @@ export async function startPolling() {
 
 
 async function handleOne(update: any) {
-        const msg = update.message;
-        if (!msg?.text) return;
+    const msg = update.message;
+    if (!msg?.text) return;
 
-        const chat_id = msg.chat.id;
-        const user_msg = msg.text;
-        last_chat_id = chat_id;
+    const chat_id = msg.chat.id;
+    const user_msg = msg.text;
+    last_chat_id = chat_id;
 
     try {
         if(await handleCommand(chat_id, user_msg)) return;
 
-        const history = await getChatHistoryWithVectorSimilarity(chat_id, user_msg, 10);
+        const history = await getChatHistoryWithVectorSimilarity(user_msg, parseInt(MAX_HISTORY_COUNT ?? "5"));
 
         await sendTypingAction(chat_id);
         const replyResult = await generateReply(history, user_msg, true);
