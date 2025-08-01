@@ -1,10 +1,7 @@
-import { Database } from "bun:sqlite";
-import { generateEmbedding, recallTopSimilar } from "../llm/embedding";
+import { generateEmbedding, recallMostSimilar, recallTopSimilar } from "../llm/embedding";
 import type { History, ChatRole } from "../types"
+import {getDB} from "./sqlite";
 
-
-const db = new Database(import.meta.dir + "/april.db");
-console.log("💾 connected db : ", import.meta.dir + "/april.db");
 
 
 export async function getChatHistory(limit : number, role? : ChatRole, sort_by = "DESC") : Promise<History[]> {
@@ -13,7 +10,7 @@ export async function getChatHistory(limit : number, role? : ChatRole, sort_by =
 
 
 export async function getChatHistoryWithVectorSimilarity(compared_data : string, limit : number) : Promise<History[]> {
-    const similar : History[] = await recallTopSimilar(compared_data);
+    const similar : History[] = await recallMostSimilar(compared_data);
     const history : History[] = getMessages(limit).reverse();
     const mergedHistory : History[] = [...similar, ...history];
     return mergedHistory;
@@ -22,6 +19,7 @@ export async function getChatHistoryWithVectorSimilarity(compared_data : string,
 
 
 export function getMessages(limit : number, role? : ChatRole, sort_by : string = 'DESC') : History[] {
+    const db = getDB();
     let params : {[key: string] : any }= {
         ":limit" : limit,
     }
@@ -46,9 +44,11 @@ export async function saveToChatHistory(entry: {
     tokens_output?: number,
     model?: string,
     cost_usd?: number,
+    chat_type?: 'voicemail' | 'standard',
     is_simulated?: boolean,
 }, skip_embedding : boolean = false) {
 
+    const db = getDB();
     let vector: string | null = null;
     if(!skip_embedding) {
         try {
@@ -62,8 +62,8 @@ export async function saveToChatHistory(entry: {
     db.run(
         `
         INSERT INTO chat_history
-        (chat_id, role, content, tokens_input, tokens_output, model, cost_usd, vector, is_simulated)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (chat_id, role, content, tokens_input, tokens_output, model, cost_usd, vector, is_simulated, type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             entry.chat_id,
             entry.role,
@@ -74,6 +74,7 @@ export async function saveToChatHistory(entry: {
             entry.cost_usd ?? null,
             vector,
             entry.is_simulated ?? 0,
+            entry.chat_type ?? 'standard'
         ]
     );
 }

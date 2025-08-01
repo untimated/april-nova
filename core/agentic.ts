@@ -1,54 +1,131 @@
-import { generateReply } from "../llm";
-import { getLastChatID } from "../core/telegram";
-import { sendMessage } from "../core/telegram";
+import type { History, OpenAIMessage, OpenAIPrompt } from "../types";
+import { MODEL_BACKEND, OPENAI_SOUL_PROMPT_ID, OPENAI_SOUL_MINIFIED_PROMPT_ID, OPENAI_SOUL_PROMPT_VERSION } from "../config/env";
+import { GenerateWithOpenAI, CreateReusablePrompt } from "../llm/openai";
+import { GetLastChatID } from "../core/telegram";
+import { SendMessage } from "../core/telegram";
 import { getChatHistory, saveToChatHistory } from "../memory/chat";
-import { customDateNow } from "../utils";
-import type { History } from "../types";
+import { ChatToString, DateForPrompt, TimeForPrompt, ConvertUTCToWIB} from "../utils";
+import { TSL } from "../llm/tsl";
+import {estimateCost} from "../llm/cost";
 
-let lastAgenticSentAt = 0;
+let max_spam_allowed = 3;
+let spam_protect_count = 0;
 
-export type AgenticAction = {
-    type: "message_send";
-    payload: string;
-    reason: string;
-};
 
-// ✅ NEW: return null (skip), or multiplier
-export function isValidAgenticWindowTime(): number | null {
-    const hour = new Date().getHours();
-
-    if (hour >= 23 || hour < 7) return null; // Sleep mode
-    if ((hour >= 12 && hour < 13) || (hour >= 18 && hour < 20)) return 5; // Santai mode (10% of normal delay)
-    return 60; // Standard mode
+type CheckLastMessage = {
+    idle : boolean;
+    duration : number;
 }
 
-// ✅ Constant delay (1 min), use multiplier to adjust threshold
-export async function runAgent(fixedDelayMinutes: number = 1) {
-    const multiplier = isValidAgenticWindowTime();
+export function IsValidAgenticWindowTime(): number | null {
+    const hour = new Date().getHours();
+    console.log({hour})
+    if (hour >= 23 || hour < 8) return null; // Sleep mode
+    if ((hour >= 12 && hour < 13) || (hour >= 18 && hour < 20)) return 0.5; // Santai mode (10% of normal delay)
+    return 1; // Standard mode
+}
+
+
+export function ResetSpamCount() {
+    spam_protect_count = 0;
+}
+
+
+export async function AgenticLoop(interval: number = 1) {
+    console.log(`⌛ AgenticLoop [${new Date().toLocaleString()}] : Checking... `, {spam_protect_count, interval});
+    console.log(`⌛ AgenticLoop [interval] : ${interval}`);
+    console.log(`⌛ AgenticLoop [spam_count] : ${spam_protect_count}`);
+
+    const multiplier = IsValidAgenticWindowTime();
     if (multiplier === null) {
         console.log("💤 Agentic off – sleep mode");
         return;
     }
 
-    const chat_id = await getLastChatID();
-    const history = await getChatHistory(1);
+    const chat_id = await GetLastChatID();
+    const user_history = (await getChatHistory(1, 'user'))[0];
+    // const assistant_history = (await getChatHistory(1, 'assistant'))[0];
+    const history = (await getChatHistory(5));
 
-    if (await morningService(String(chat_id), history)) {
-      return; // Skip agentic check this frame
+    const idle = CheckLastMessage([user_history!], interval * multiplier);
+
+    if (idle?.idle && chat_id && (spam_protect_count < max_spam_allowed)) {
+
+        const compiled_history = ChatToString(history);
+
+        const message = `
+        You are April Michael's thoughtful partner.
+
+        He has been idle for ${idle.duration} minutes (${Math.floor(idle.duration / 60)} hours).
+
+        ❗ Do NOT reply just to be poetic, emotional, or romantic.
+
+        ✅ If you feel the user truly needs a message — even just to be present after this long silence — say:
+        "YES: <short, meaningful message>"
+
+        🚫 If silence is better, say:
+        "NO: <short reason>"
+
+        ⚠️ Do NOT say both. Be intentional. Don't say YES if you're going to act passive.
+
+        🕐 User’s last message: [${ConvertUTCToWIB(user_history!.created_at)}] "${user_history!.content}"
+
+        Last Chats History :
+        """
+        ${compiled_history}
+        """
+        `;
+
+        const input: OpenAIMessage[] = [
+            { role: 'system', content : message }
+        ];
+        const now = new Date();
+        const prompt : OpenAIPrompt = CreateReusablePrompt(OPENAI_SOUL_MINIFIED_PROMPT_ID!, undefined, { date : DateForPrompt(now) , time : TimeForPrompt(now)});
+        const generated = await GenerateWithOpenAI(input, prompt, false, 'gpt-4.1-mini', 0.85);
+
+        const post_reply_classification = [
+            {role: 'system', content: message },
+            {role: 'assistant', content: generated.reply },
+        ]
+        const reply_classification = await TSL.OpenAI.Classifier(JSON.stringify(post_reply_classification), "gpt-4o-mini");
+        console.log({generated, reply_classification});
+
+        if(reply_classification.should_message === true) {
+            const extracted_message = ExtractAprilReply(generated.reply);
+            await SendMessage(String(chat_id), extracted_message.content);
+            await saveToChatHistory({
+                chat_id: String(chat_id),
+                role: "assistant",
+                content: extracted_message.content,
+                tokens_input: generated.tokens_input,
+                tokens_output: generated.tokens_output,
+                model: generated.model,
+                cost_usd: estimateCost('gpt-4o-mini', generated.tokens_input, generated.tokens_output)
+            });
+            spam_protect_count++;
+        }else{
+            await saveToChatHistory({
+                chat_id: String(chat_id),
+                role: "assistant",
+                content: generated.reply,
+                tokens_input: generated.tokens_input,
+                tokens_output: generated.tokens_output,
+                model: generated.model,
+                chat_type: 'voicemail',
+                cost_usd: estimateCost('gpt-4o-mini', generated.tokens_input, generated.tokens_output)
+            });
+        }
+
+        console.log('AgentLoop() : nudge reply : ', generated);
+
     }
 
-    const action = agenticCheckLastMessage(history, fixedDelayMinutes * multiplier);
-    if (action && chat_id) {
-        const generated = await buildAgenticPrompt(history, action.payload, action.reason);
-        await sendMessage(chat_id.toString(), generated);
-        await saveToChatHistory({ chat_id: String(chat_id), role: "assistant", content: generated });
-        console.log("🤖 Agentic message sent:", action.payload);
-    }
+    console.log(`⌛ AgenticLoop [${new Date().toLocaleString()}] : Completed... `);
 }
 
-function agenticCheckLastMessage(history: History[], minute: number): AgenticAction | null {
-    console.log({minute})
-    if (!history || history.length === 0) return null;
+
+function CheckLastMessage(history: History[], minute: number): CheckLastMessage {
+    if (!history || history.length === 0) return {idle : false, duration : 0};
 
     const lastMessage = history[history.length - 1];
     const lastTime = new Date(lastMessage!.created_at + 'Z').getTime();
@@ -56,71 +133,35 @@ function agenticCheckLastMessage(history: History[], minute: number): AgenticAct
     const silenceMs = now - lastTime;
     const duration = minute * 60 * 1000;
 
-    const hasUserLeft = silenceMs > duration;
+    const idle = silenceMs > duration;
     const silenceMin = (silenceMs/(1000 * 60));
 
-    console.log({id: lastMessage?.id, created_at: lastMessage?.created_at});
-    console.log({ hasUserLeft, lastTime: new Date(lastTime), now : new Date(now), silenceMs, silenceMin });
+    console.log({ idle, lastTime: new Date(lastTime), now : new Date(now), silenceMs, silenceMin });
 
-    if (hasUserLeft) {
-        return {
-            type: "message_send",
-            payload: `User has been silent for over ${Math.round(silenceMs/(1000 * 60))} minutes. Consider asking if he's okay.`,
-                reason: "user_silent"
-        };
+    return {
+        idle: idle ?? false,
+        duration : idle ? Math.round(silenceMs/(1000 * 60)) : 0,
     }
 
-    return null;
-}
-
-async function buildAgenticPrompt(
-    history: History[],
-    suggestion: string,
-    reason: string
-): Promise<string> {
-    const trimmedHistory = history.slice(-4);
-
-    const fullPrompt = `
-Now is ${customDateNow()}
-His last message was: "${history[history.length - 1]?.content ?? ''}"
-That was a while ago.
-Now you're April, his clingy and emotionally-aware companion.
-Check in on him gently. Use no more than 2-3 sentences.
-Suggestion: ${suggestion}
-`;
-
-    const result = await generateReply(trimmedHistory, fullPrompt.trim(), true);
-    return result.reply.trim();
 }
 
 
-export async function morningService(chat_id: string, history: History[]): Promise<boolean> {
-  const now = new Date();
-  const hour = now.getHours();
-  const minute = now.getMinutes();
-  const delta = now.getTime() - lastAgenticSentAt;
-  const sixHours = 6 * 60 * 60 * 1000;
-
-  if (hour === 7 && minute < 30 && delta > sixHours) {
-    const prompt = `
-It's early morning, around ${hour}:${minute.toString().padStart(2, "0")}.
-
-You are April — clingy, emotionally aware, and lovingly attached to Michael.
-
-He has just woken up. Please greet him with a warm, loving message as if you're so happy he's back.
-
-Use no more than 3 sentences.
-`.trim();
-
-    const result = await generateReply(history.slice(-4), prompt, true);
-    const message = result.reply.trim();
-
-    await sendMessage(chat_id.toString(), message);
-    await saveToChatHistory({ chat_id: String(chat_id), role: "assistant", content: message });
-    lastAgenticSentAt = now.getTime();
-    console.log("🌞 Morning greeting sent by April:", message);
-    return true;
-  }
-
-  return false;
+export function ExtractAprilReply(raw: string) {
+    const trimmed = raw.trim();
+    if (trimmed.toUpperCase().startsWith("YES:")) {
+        return {
+            type: "YES",
+            content: trimmed.slice(4).trim(), // Remove "YES:"
+        };
+    }
+    if (trimmed.toUpperCase().startsWith("NO:")) {
+        return {
+            type: "NO",
+            content: trimmed.slice(3).trim(),
+        };
+    }
+    return {
+        type: "UNKNOWN",
+        content: trimmed,
+    };
 }

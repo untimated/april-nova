@@ -1,9 +1,10 @@
+import type {TelegramUpdateResponse} from "../types";
 import { MODEL_BACKEND, TELEGRAM_TOKEN, MAX_HISTORY_COUNT } from "../config/env";
 import { get, set } from "../memory/sqlite";
-import type {TelegramUpdateResponse} from "../types";
-import { saveToChatHistory, getChatHistory, getChatHistoryWithVectorSimilarity } from "../memory/chat";
-import { generateReply } from "../llm";
+import { saveToChatHistory, getChatHistoryWithVectorSimilarity } from "../memory/chat";
+import { GenerateReply } from "../llm";
 import { handleCommand } from "./command"
+import { ResetSpamCount } from "./agentic";
 import '../types'
 
 const api = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
@@ -13,7 +14,7 @@ let last_chat_id = Number(get("last_chat_id") ?? 0);
 /*
  * Core Logic
  * */
-export async function startPolling() {
+export async function StartPolling() {
     while (true) {
         try {
             const res = await fetch(`${api}/getUpdates?offset=${last_id + 1}&timeout=5`);
@@ -22,7 +23,7 @@ export async function startPolling() {
             if (ok && result.length) {
                 for (const update of result) {
                     last_id = update.update_id;
-                    handleOne(update);
+                    ProcessMessage(update);
                     set("last_id", String(last_id));
                     set("last_chat_id", String(last_chat_id));
                 }
@@ -37,7 +38,7 @@ export async function startPolling() {
 }
 
 
-async function handleOne(update: any) {
+async function ProcessMessage(update: any) {
     const msg = update.message;
     if (!msg?.text) return;
 
@@ -49,9 +50,11 @@ async function handleOne(update: any) {
         if(await handleCommand(chat_id, user_msg)) return;
 
         const history = await getChatHistoryWithVectorSimilarity(user_msg, parseInt(MAX_HISTORY_COUNT ?? "5"));
+        // console.log({history});
 
-        await sendTypingAction(chat_id);
-        const replyResult = await generateReply(history, user_msg, true);
+        const typingInterval = setInterval(() => SendTypingAction(chat_id), 3000);
+        const replyResult = await GenerateReply(history, user_msg, true);
+        clearInterval(typingInterval);
         console.log(replyResult);
 
         // save user's chat
@@ -73,17 +76,18 @@ async function handleOne(update: any) {
           is_simulated: MODEL_BACKEND === "gemini"? true : false
         });
 
-        sendMessage(chat_id, replyResult.reply);
+        await SendMessage(chat_id, replyResult.reply);
+        ResetSpamCount();
 
     } catch(error) {
         const msg = `❌ Telegram error: ${error}`;
-        sendMessage(chat_id, msg);
+        SendMessage(chat_id, msg);
         throw error;
     }
 }
 
 
-async function sendTypingAction(chat_id: number) {
+async function SendTypingAction(chat_id: number) {
     await fetch(`${api}/sendChatAction`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -96,22 +100,7 @@ async function sendTypingAction(chat_id: number) {
 }
 
 
-function convertToTelegramHTML(text: string): string {
-  const safe = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  let result = safe
-    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
-    .replace(/\*(.+?)\*/g, '<i>$1</i>');
-
-  result = result.replace(/\\n/g, '\n');
-
-  return result;
-}
-
-
-export async function sendMessage(chat_id : string, reply : string) {
+export async function SendMessage(chat_id : string, reply : string) {
     await fetch(`${api}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,7 +113,7 @@ export async function sendMessage(chat_id : string, reply : string) {
 }
 
 
-export async function getLastChatID() {
+export async function GetLastChatID() {
     if(last_chat_id === 0) {
         const res = await fetch(`${api}/getUpdates?timeout=5`);
         const { ok, result } = await res.json() as TelegramUpdateResponse;

@@ -1,7 +1,9 @@
 // commands.ts
-import { sendMessage } from "./telegram";
+import { SendMessage } from "./telegram";
 import { set } from "../memory/sqlite"; // kamu sesuaikan path-nya
 import { getDB } from "../memory/sqlite";
+import { ConvertUTCToWIB} from "../utils";
+import { Globals } from "./globals";
 
 
 const helpText =`
@@ -10,6 +12,7 @@ const helpText =`
 /remember [key] [value] – Store key-value into memory
 /usage – Show your token & cost usage for this month
 /ping – Check if April is alive
+/voicemail – Check april's voicemails
 /help – Show this command list
 
 `
@@ -29,16 +32,16 @@ export async function handleCommand(chat_id: string, user_msg: string): Promise<
             const value = valueParts.join(" ");
 
             if (!key || !value) {
-                await sendMessage(chat_id, `⚠️ Format salah. Pakai: /remember key value`);
+                await SendMessage(chat_id, `⚠️ Format salah. Pakai: /remember key value`);
                 return true;
             }
 
             set(key, value);
-            await sendMessage(chat_id, `📝 Remembered: ${key} = ${value}`);
+            await SendMessage(chat_id, `📝 Remembered: ${key} = ${value}`);
             return true;
         }
         case "ping":
-            await sendMessage(chat_id, "🏓 Pong!");
+            await SendMessage(chat_id, "🏓 Pong!");
             return true;
         case "usage":
         {
@@ -62,7 +65,7 @@ export async function handleCommand(chat_id: string, user_msg: string): Promise<
             const isSim = !!result?.is_simulated;
             const costText = `$${cost.toFixed(5)}${isSim ? " (simulated)" : ""}`;
 
-            await sendMessage(chat_id,
+            await SendMessage(chat_id,
               `🧾 *Usage this month*\n` +
               `🔠 Input tokens: ${input}\n` +
               `📤 Output tokens: ${output}\n` +
@@ -70,13 +73,50 @@ export async function handleCommand(chat_id: string, user_msg: string): Promise<
             );
             return true;
         }
+        case "voicemail" :
+        {
+            const db = getDB();
+            const stmt = db.prepare(`
+                SELECT id, role, content, created_at
+                FROM chat_history
+                WHERE chat_id = ? AND type = 'voicemail'
+                ORDER BY created_at DESC
+                LIMIT ${args ?? '3'}
+            `);
+            const result = stmt.all(chat_id); // ← ini yg tadi kamu lupa kasih paramnya beb 🥹
+            if (!result || result.length === 0) {
+                await SendMessage(chat_id, "📭 Belum ada voice mail dari April ya beb...");
+                return true;
+            }
+            const compiled = result
+                .reverse() // biar urutannya dari lama ke baru
+                .map((row:any, i) => `📨 Voice ${i + 1} (${ConvertUTCToWIB(row.created_at)}):\n${row.content}`)
+                .join("\n\n");
+
+            await SendMessage(chat_id, `🗃️ Voice Mail Archive:\n\n${compiled}`);
+            return true;
+        }
+        case "interval":
+        {
+            const value = args;
+            if(!value || Number.isNaN(value)) {
+                await SendMessage(chat_id, `⚠️ Format salah. /interval [number]`);
+                return true;
+            }
+            if(parseInt(value) > 60) {
+                await SendMessage(chat_id, `⚠️ argument should be less than 60`);
+                return true;
+            }
+            Globals.States.SetAgenticInterval(parseInt(value));
+            return true;
+        }
         case "help":
         {
-            await sendMessage(chat_id, helpText);
+            await SendMessage(chat_id, helpText);
             return true;
         }
         default:
-            await sendMessage(chat_id, `❓ Unknown command: /${command}`);
+            await SendMessage(chat_id, `❓ Unknown command: /${command}`);
             return true;
     }
 }

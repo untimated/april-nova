@@ -1,7 +1,13 @@
 /* Types */
 
 
-export type ChatRole = "user" | "assistant";
+export type ChatRole = "user" | "assistant" | "system";
+export type AIModels =
+    "gpt-4o" | "gpt-4o-2024-05-13" |
+    "gpt-4o-mini" | "gpt-4o-mini-2024-07-18" |
+    "gpt-4.1" |  "gpt-4.1-mini" | "gpt-4.1-nano" |
+    "gemini"
+    ;
 
 export type TelegramUpdateResponse = {
     ok: boolean;
@@ -31,37 +37,22 @@ export type GeminiError = {
     }
 };
 
+export type OpenAIPrompt = {
+        id: string;
+        version?: string;
+        variables?: Record<string, string>;
+}
 
 export type OpenAIRequest = {
-    prompt: {
-        id: string;
-        version: string;
-        variables: Record<string, string>;
-    };
-    // input: OpenAISDKMessage[];
+    prompt: OpenAIPrompt;
     input: OpenAIMessage[];
 };
-
 
 export type OpenAIMessage = {
     role: ChatRole,
     content: string,
     timestamp?: string,
 }
-
-
-// export type OpenAIMessage = {
-//     role: ChatRole,
-//     content: {type: "input_text", text: string}[],
-// }
-
-// export type OpenAISDKMessage = {
-//   role: ChatRole,
-//   content: {
-//     type: "input_text", // ✅ LITERAL type
-//     text: string,
-//   }[],
-// }
 
 
 export type LLMReplyResult = {
@@ -84,3 +75,33 @@ export type History = {
 }
 
 
+export type TSLClassification = {
+    vibe : string,
+    intent: string,
+    should_message : boolean,
+    message_type?: string;
+    affection_score?: number;
+    seriousness_score?: number;
+    intimacy_score?: number;
+    philosophy_score?: number;
+    technical_score?: number;
+    consecutive_affection_level: number;
+}
+
+export type TSLSummary = {
+    summary : string,
+}
+
+export type TSLThoughtContext = {
+    user_message: string;
+    silence_in: number;
+    memory_summary?: string;
+    history?: History[]; // from types.ts
+};
+
+export type TSLThoughtResult = {
+    inject: string;
+    should_message: boolean;
+    force_tone?: string;
+    delay_ms?: number;
+};

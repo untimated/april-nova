@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 
-const db = new Database(import.meta.dir + "/april.db");
+// const db = new Database(import.meta.dir + "/april.db");
+const db = new Database("april.db");
 
 /*
  * @remark set key value on KV table

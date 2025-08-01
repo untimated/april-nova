@@ -41,27 +41,49 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 
-export async function recallTopSimilar(text: string, topN: number = 3)  : Promise<History[]> {
-  const db = getDB();
-  const targetVec = await generateEmbedding(text);
-
-  const rows = db.prepare(`
-    SELECT *
-    FROM chat_history
-    WHERE vector IS NOT NULL
-    ORDER BY created_at ASC
-    LIMIT 4
-  `).all() as History[];
-
-  const scored : History[] = rows.map(( row : History ) => {
-    try {
-      const vec = JSON.parse(row.vector ?? "");
-      const score = cosineSimilarity(targetVec, vec);
-      return { ...row, score };
-    } catch {
-      return { ...row };
-    }
-  }).filter(Boolean).sort((a: any, b: any) => b!.score - a!.score);
-
-  return scored.slice(0, topN);
+export async function recallMostSimilar(
+    text: string,
+    limit: number = 1,
+    threshold: number = 0.5
+): Promise<History[]> {
+    const top = await recallTopSimilar(text, limit, threshold);
+    return top;
 }
+
+
+export async function recallTopSimilar(
+    text: string,
+    topN: number = 3,
+    threshold: number = 0
+): Promise<(History & { score: number })[]> {
+    const db = getDB();
+    const targetVec = await generateEmbedding(text);
+
+    const rows = db.prepare(`
+        SELECT *
+        FROM chat_history
+        WHERE vector IS NOT NULL
+    `).all() as History[];
+
+    const scored = rows.map((row) => {
+        try {
+            const vec = JSON.parse(row.vector ?? "[]");
+            const score = cosineSimilarity(targetVec, vec);
+            return { ...row, score };
+        } catch {
+            return null;
+        }
+    }).filter((r): r is History & { score: number } => !!r && r.score >= threshold)
+    .sort((a, b) => b.score - a.score);
+
+    console.table([{prompt_to_compare : text}])
+    console.table(scored.map(x => ({
+      id: x.id,
+      score: x.score,
+      content: x.content.slice(0, 50),
+    })));
+
+    return scored.slice(0, topN);
+}
+
+
