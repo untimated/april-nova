@@ -4,7 +4,7 @@ import { GetLastChatID } from "./core/telegram";
 import { AgenticLoop } from "./core/agentic";
 import { MODEL_BACKEND } from "./config/env";
 
-import { Globals } from "./core/globals";
+import { Global } from "./core/globals";
 
 
 console.log("----------------------------");
@@ -16,13 +16,11 @@ console.log("🟡 Embedding model preloaded");
 
 if(MODEL_BACKEND == 'openai') {
     console.log("🟡 Setting up agentic scheduler")
-    const minute = 5;
     const id = setInterval(
-        async () => AgenticLoop(Globals.States.agentic_interval_minute),
-        Globals.States.agentic_interval_ms
+        async () => AgenticLoop(Global.state.agentic_interval_minute),
+        Global.state.agentic_interval_ms
     );
-    Globals.States.SetAgenticIntervalID(id);
-
+    Global.mutator.SetAgenticIntervalID(id);
 }
 
 console.log("🟢 April Nova Ready");

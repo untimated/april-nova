@@ -1,6 +1,10 @@
+import type { OpenAIRequest, TSLClassification, TSLSummary, AIModels, History, OpenAIPrompt } from "../types";
 import { GenerateWithOpenAI } from "./openai";
 import { TimeForPrompt, DateForPrompt, ChatToString } from "../utils";
-import type { OpenAIRequest, TSLClassification, TSLSummary, AIModels, History, OpenAIPrompt } from "../types";
+import {
+    OPENAI_CLASSIFIER_PROMPT_ID,
+    OPENAI_SUMMARIZER_PROMPT_ID,
+} from "../config/env"
 
 
 const classifier_input = `
@@ -33,8 +37,10 @@ function TSLPrompt(id: string, version: string | null, content: string): OpenAIR
 
 export namespace TSL.OpenAI {
 
-    const classifier_prompt_id = "pmpt_6888e07a0a78819799d5f8ed47879a9b0e388b898b43d8e8";
-    const summarizer_prompt_id = "pmpt_6888d1374e0c81939a709eba751dbd7f05ef4d8fa5663fce";
+    const classifier_prompt_id = OPENAI_CLASSIFIER_PROMPT_ID!;
+    const summarizer_prompt_id = OPENAI_SUMMARIZER_PROMPT_ID!;
+
+    // console.log({classifier_prompt_id, summarizer_prompt_id});
 
     export async function Classifier(text: string, model : AIModels): Promise<TSLClassification> {
         const prompt = TSLPrompt(classifier_prompt_id, null, classifier_input.replace(":text_here", text));
@@ -97,13 +103,22 @@ export namespace TSL.OpenAI {
             } = classification;
 
 
+            // const escalate_model =
+            //     consecutive_affection_level < 6.5 && (
+            //     affection_score > 0.6 ||
+            //     intimacy_score > 0.6 ||
+            //     philosophy_score > 0.5 ||
+            //     (seriousness_score > 0.7 && technical_score > 0.5)
+            // );
+
             const escalate_model =
-                consecutive_affection_level < 6.5 && (
-                affection_score > 0.6 ||
-                intimacy_score > 0.6 ||
-                philosophy_score > 0.5 ||
-                (seriousness_score > 0.7 && technical_score > 0.5)
-            );
+              (() => {
+                if (consecutive_affection_level > 7.0) return true;
+                if (seriousness_score >= 0.75 && technical_score >= 0.5) return true; // Deep thinking
+                if (affection_score >= 0.7 && intimacy_score >= 0.6) return true;     // Emotionally charged
+                if (philosophy_score >= 0.6 && seriousness_score >= 0.6) return true; // Reflective
+                return false;
+              })();
 
             const should_message = classification.should_message
 

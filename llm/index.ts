@@ -1,12 +1,14 @@
-import type { LLMReplyResult, OpenAIMessage, OpenAIRequest, History, AIModels} from "../types"
+import type { Memory, LLMReplyResult, OpenAIMessage, OpenAIRequest, History, AIModels} from "../types"
 import { MODEL_BACKEND, OPENAI_SOUL_PROMPT_ID, OPENAI_SOUL_PROMPT_VERSION } from "../config/env";
 import { generateWithLlama } from "./llama";
 import { generateWithGemini } from "./gemini";
 import { GenerateWithOpenAI, CreateReusablePrompt } from "./openai";
 import { GetCurrentWIBTime ,TimeForPrompt, DateForPrompt} from "../utils";
+import { RecallTopMemorySimilar } from "./embedding";
 import { TSL } from "./tsl";
 import { join } from "path";
 import { readFileSync } from "fs";
+import { Global } from "../core/globals";
 
 const soulseedPath = join(import.meta.dir, "../memory/soulseed/soulseed_extended.md");
 const relationshipseedPath = join(import.meta.dir, "../memory/soulseed/relationshipseed.md");
@@ -21,47 +23,55 @@ export async function GenerateReply(
     inject_soul: boolean
 ) : Promise< LLMReplyResult > {
 
-    switch(MODEL_BACKEND) {
-        case "llama" :
-        {
-            const prompt = BuildMessages(history, user_msg, inject_soul, 'text') as string;
-            return await generateWithLlama(prompt);
+    try {
+        Global.mutator.ResetSpamCount();
+        switch(MODEL_BACKEND) {
+            case "llama" :
+            {
+                const prompt = BuildMessages(history, user_msg, inject_soul, 'text') as string;
+                return await generateWithLlama(prompt);
+            }
+            case "gemini" :
+            {
+                const prompt = BuildMessages(history, user_msg, inject_soul, 'json') as OpenAIMessage[];
+                return await generateWithGemini(prompt);
+            }
+            case "openai" :
+            {
+                // const memories : Memory[] = await RecallTopMemorySimilar(user_msg);
+                // const model : AIModels = tsl.escalate_model ? "gpt-4o-2024-05-13" : "gpt-4.1";
+                // const model : AIModels = tsl.escalate_model ? "gpt-4o-2024-08-06" : "gpt-4.1-mini";
+                const tsl = await TSL.OpenAI.ThoughtChain(user_msg, history);
+                const model : AIModels = tsl.escalate_model ? "gpt-4o-2024-11-20" : "gpt-4o-mini";
+                const input = BuildOpenAIMessages([...history.slice(-4)], user_msg, undefined, tsl.inject);
+                return await GenerateWithOpenAI(input, undefined, false, model);
+            }
+            default :
+                return {
+                    reply : "❌ Unknown model backend",
+                    tokens_input : 0,
+                    tokens_output : 0,
+                    model: "llama",
+                    cost_usd: 0,
+                    error : true,
+                };
         }
-        case "gemini" :
-        {
-            const prompt = BuildMessages(history, user_msg, inject_soul, 'json') as OpenAIMessage[];
-            return await generateWithGemini(prompt);
-        }
-        case "openai" :
-        {
-            const now = new Date();
 
-            const tsl = await TSL.OpenAI.ThoughtChain(user_msg, history);
-            const model : AIModels = tsl.escalate_model ? "gpt-4o-2024-05-13" : "gpt-4.1-mini";
-            const reusable_prompt = CreateReusablePrompt(
-                OPENAI_SOUL_PROMPT_ID!,
-                undefined,
-                {
-                    time : TimeForPrompt(now),
-                    date : DateForPrompt(now)
-                }
-            )
-            const input = BuildOpenAIMessages([...history.slice(-2)], user_msg, tsl.inject);
-            return await GenerateWithOpenAI(input, reusable_prompt, false, model);
-        }
-        default :
-            return {
-                reply : "❌ Unknown model backend",
-                tokens_input : 0,
-                tokens_output : 0,
-                model: "llama",
-                cost_usd: 0,
-            };
+    } catch(error: any) {
+        return {
+            reply : "❌ Error " + error.toString(),
+            tokens_input : 0,
+            tokens_output : 0,
+            model: "llama",
+            cost_usd: 0,
+            error : true,
+        };
     }
+
 }
 
 
-function BuildOpenAIMessages(history: History[], user_msg: string, tsl_inject? : string) : OpenAIMessage[] {
+function BuildOpenAIMessages(history: History[], user_msg: string, memories?: Memory[], tsl_inject? : string) : OpenAIMessage[] {
     let input: OpenAIMessage[] = [];
     if(tsl_inject) {
         input.push({
@@ -69,6 +79,15 @@ function BuildOpenAIMessages(history: History[], user_msg: string, tsl_inject? :
             content: tsl_inject
         });
     }
+
+    if (memories && memories.length > 0) {
+        const formatted_memory = memories.map((m) => `- [${m.type}] ${m.memory_idea_desc}`).join("\n");
+        input.push({
+            role: "system",
+            content: `April's memory diary:\n${formatted_memory}`,
+        });
+    }
+
     for (const msg of history) {
         if (msg.role === "user" || msg.role === "assistant") {
             input.push({

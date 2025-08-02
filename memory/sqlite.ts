@@ -8,7 +8,7 @@ const db = new Database("april.db");
  * similar to redis
  * */
 export function set(key: string, value: string) {
-    console.log("key value set to table kv ", {key, value})
+    console.log("key value set to table kv ", [key, value])
     db.run(`INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)`, [key, value]);
 }
 

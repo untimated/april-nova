@@ -1,20 +1,18 @@
-import { generateEmbedding, recallMostSimilar, recallTopSimilar } from "../llm/embedding";
-import type { History, ChatRole } from "../types"
-import {getDB} from "./sqlite";
+import type { History, ChatRole, Memory } from "../types"
+import { generateEmbedding, RecallMostSimilar, RecallTopSimilar, RecallTopMemorySimilar } from "../llm/embedding";
+import { getDB } from "./sqlite";
 
 
-
-export async function getChatHistory(limit : number, role? : ChatRole, sort_by = "DESC") : Promise<History[]> {
-    return getMessages(limit, role, sort_by).reverse();
+export async function getChatHistory(limit : number, role? : ChatRole) : Promise<History[]> {
+    return getMessages(limit, role).reverse();
 }
 
 
-export async function getChatHistoryWithVectorSimilarity(compared_data : string, limit : number) : Promise<History[]> {
-    const similar : History[] = await recallMostSimilar(compared_data);
+export async function getChatHistoryWithVectorSimilarity(message : string, limit : number) : Promise<History[]> {
+    const similar : History[] = await RecallMostSimilar(message);
     const history : History[] = getMessages(limit).reverse();
     const mergedHistory : History[] = [...similar, ...history];
-    return mergedHistory;
-
+    return mergedHistory
 }
 
 
@@ -59,6 +57,8 @@ export async function saveToChatHistory(entry: {
         }
     }
 
+    console.log("--- New Chat saved ", entry);
+
     db.run(
         `
         INSERT INTO chat_history
@@ -79,4 +79,35 @@ export async function saveToChatHistory(entry: {
     );
 }
 
+
+export async function GetMemory(message: string, limit: number = 3) {
+    const res: Memory[] = await RecallTopMemorySimilar(message, limit);
+    return res;
+}
+
+
+export async function SaveMemory(entry: Memory) {
+    const db = getDB();
+    const now = entry.date_created ?? new Date().toISOString();
+
+    let vector: string | null = null;
+
+    try {
+        const vec = await generateEmbedding(entry.memory_idea_desc);
+        vector = JSON.stringify(vec);
+    } catch (err) {
+        console.warn("⚠️ Failed to generate embedding for memory:", err);
+    }
+
+    db.prepare(`
+        INSERT INTO memory (type, title, memory_idea_desc, date_created, vector)
+        VALUES (?, ?, ?, ?, ?)
+    `).run(
+        entry.type,
+        entry.title,
+        entry.memory_idea_desc,
+        now,
+        vector
+    );
+}
 

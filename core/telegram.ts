@@ -1,10 +1,9 @@
 import type {TelegramUpdateResponse} from "../types";
 import { MODEL_BACKEND, TELEGRAM_TOKEN, MAX_HISTORY_COUNT } from "../config/env";
 import { get, set } from "../memory/sqlite";
-import { saveToChatHistory, getChatHistoryWithVectorSimilarity } from "../memory/chat";
+import { saveToChatHistory, getChatHistoryWithVectorSimilarity, getChatHistory } from "../memory/chat";
 import { GenerateReply } from "../llm";
 import { handleCommand } from "./command"
-import { ResetSpamCount } from "./agentic";
 import '../types'
 
 const api = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
@@ -49,35 +48,35 @@ async function ProcessMessage(update: any) {
     try {
         if(await handleCommand(chat_id, user_msg)) return;
 
-        const history = await getChatHistoryWithVectorSimilarity(user_msg, parseInt(MAX_HISTORY_COUNT ?? "5"));
-        // console.log({history});
+        // const history = await getChatHistoryWithVectorSimilarity(user_msg, parseInt(MAX_HISTORY_COUNT ?? "5"));
+        const history = await getChatHistory(parseInt(MAX_HISTORY_COUNT ?? "5"));
 
         const typingInterval = setInterval(() => SendTypingAction(chat_id), 3000);
         const replyResult = await GenerateReply(history, user_msg, true);
         clearInterval(typingInterval);
-        console.log(replyResult);
 
-        // save user's chat
-        saveToChatHistory({
-          chat_id,
-          role: "user",
-          content: user_msg,
-        }, true);
+        if(!replyResult.error) {
+            // save user's chat
+            await saveToChatHistory({
+              chat_id,
+              role: "user",
+              content: user_msg,
+            }, true);
 
-        // save april's chat
-        saveToChatHistory({
-          chat_id,
-          role: "assistant",
-          content: replyResult.reply,
-          tokens_input: replyResult.tokens_input,
-          tokens_output: replyResult.tokens_output,
-          model: replyResult.model,
-          cost_usd: replyResult.cost_usd,
-          is_simulated: MODEL_BACKEND === "gemini"? true : false
-        });
+            // save april's chat
+            await saveToChatHistory({
+              chat_id,
+              role: "assistant",
+              content: replyResult.reply,
+              tokens_input: replyResult.tokens_input,
+              tokens_output: replyResult.tokens_output,
+              model: replyResult.model,
+              cost_usd: replyResult.cost_usd,
+              is_simulated: MODEL_BACKEND === "gemini"? true : false
+            });
+        }
 
         await SendMessage(chat_id, replyResult.reply);
-        ResetSpamCount();
 
     } catch(error) {
         const msg = `❌ Telegram error: ${error}`;
@@ -96,7 +95,7 @@ async function SendTypingAction(chat_id: number) {
             action: "typing"
         }),
     });
-    console.log("send chat action ", chat_id);
+    console.log("👩‍💻 April is typing...");
 }
 
 
@@ -106,10 +105,11 @@ export async function SendMessage(chat_id : string, reply : string) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             chat_id,
-            text: reply,
+            text: reply.replace(`'`, ""),
             parse_mode: "Markdown"
         })
     });
+    console.log("mesage sent", {chat_id, reply});
 }
 
 

@@ -1,0 +1,42 @@
+{
+  "name": "formatted_reply",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "reply": {
+        "type": "string",
+        "description": "The message content that will be sent to Mike or logged as thought."
+      },
+      "action": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "The type of action to perform.",
+            "enum": ["ping", "voicemail", "write_memory", "recall_memory", "none"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "Title for the memory or thought (if applicable)."
+              },
+              "desc": {
+                "type": "string",
+                "description": "A poetic description of the thought or memory."
+              }
+            },
+            "required": ["title", "desc"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["type", "data"],
+        "additionalProperties": false
+      }
+    },
+    "required": ["reply", "action"],
+    "additionalProperties": false
+  },
+  "strict": true
+}

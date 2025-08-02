@@ -1,52 +1,63 @@
 /*
- * @reamark Globals where you store states
- *
- * */
+ * @remark Global runtime states and mutators
+ */
 
 import "../config/env";
 import { AgenticLoop } from "./agentic";
 import { set } from "../memory/sqlite";
 
+export const Global = {
+    state: {
+        agentic_interval_minute: 1,
+        agentic_interval_ms: 60_000 * 1,
+        agentic_interval_id: undefined as NodeJS.Timeout | undefined,
 
-export namespace Globals {
+        max_spam_allowed: 3,
+        spam_protect_count: 0,
+    },
 
-    export namespace States {
-
-        export let agentic_interval_minute = 5;
-        export let agentic_interval_ms = 60_000 * agentic_interval_minute;
-        export let agentic_interval_id: NodeJS.Timeout;
-
-        export const SetAgenticInterval = (minute : number) => {
-            if(minute > 60) {
-                throw Error("SetAgenticInterval() : value too big");
+    mutator: {
+        SetAgenticInterval(minute: number) {
+            if (minute > 60) {
+                throw new Error("SetAgenticInterval() : value too big");
             }
-            agentic_interval_ms = minute * 60_000;
-            agentic_interval_minute = agentic_interval_ms / 60_000;
+
+            Global.state.agentic_interval_minute = minute;
+            Global.state.agentic_interval_ms = minute * 60_000;
+
             console.log({
-                agentic_interval_ms,
-                agentic_interval_minute
+                agentic_interval_ms: Global.state.agentic_interval_ms,
+                agentic_interval_minute: Global.state.agentic_interval_minute,
             });
 
             const id = setInterval(
-                async () => AgenticLoop(agentic_interval_minute),
-                agentic_interval_ms
-            )
-            console.warn("Creating new agentic loop...", {agentic_interval_id, id});
+                async () => AgenticLoop(Global.state.agentic_interval_minute),
+                Global.state.agentic_interval_ms
+            );
 
-            SetAgenticIntervalID(id);
-            set('agentic_interval', String(minute));
-        }
+            console.warn("Creating new agentic loop...", {
+                old: Global.state.agentic_interval_id,
+                new: id,
+            });
 
-        export const SetAgenticIntervalID = (id: NodeJS.Timeout) => {
-            console.warn("🧹 Clearing existing agentic interval", agentic_interval_id);
-            if(agentic_interval_id) {
-                clearInterval(agentic_interval_id);
-            }
-            agentic_interval_id = id;
-            console.warn("⌚ New sgentic interval ID assigned", id);
-        }
+            Global.mutator.SetAgenticIntervalID(id);
+            set("agentic_interval", String(minute));
+        },
 
-    }
+        SetAgenticIntervalID(id: NodeJS.Timeout) {
+            const prev = Global.state.agentic_interval_id;
+            if (prev) clearInterval(prev);
+            Global.state.agentic_interval_id = id;
 
-}
+            console.warn("⌚ New agentic interval ID assigned", id);
+        },
 
+        ResetSpamCount() {
+            Global.state.spam_protect_count = 0;
+        },
+
+        IncrementSpam(n = 1) {
+            Global.state.spam_protect_count += n;
+        },
+    },
+};

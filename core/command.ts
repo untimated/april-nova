@@ -3,7 +3,7 @@ import { SendMessage } from "./telegram";
 import { set } from "../memory/sqlite"; // kamu sesuaikan path-nya
 import { getDB } from "../memory/sqlite";
 import { ConvertUTCToWIB} from "../utils";
-import { Globals } from "./globals";
+import { Global } from "./globals";
 
 
 const helpText =`
@@ -107,7 +107,7 @@ export async function handleCommand(chat_id: string, user_msg: string): Promise<
                 await SendMessage(chat_id, `⚠️ argument should be less than 60`);
                 return true;
             }
-            Globals.States.SetAgenticInterval(parseInt(value));
+            Global.mutator.SetAgenticInterval(parseInt(value));
             return true;
         }
         case "help":

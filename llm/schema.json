@@ -1,0 +1,55 @@
+{
+  "name": "openai_formatted_reply",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "reply": {
+        "type": "string",
+        "description": "The main textual reply."
+      },
+      "action": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Type of action. Acceptable values are any string, but commonly 'none', 'recall_memory', or 'write_memory'.",
+            "enum": [
+              "none",
+              "recall_memory",
+              "write_memory"
+            ]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "Title associated with the action."
+              },
+              "desc": {
+                "type": "string",
+                "description": "Description associated with the action."
+              }
+            },
+            "required": [
+              "title",
+              "desc"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "type",
+          "data"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "reply",
+      "action"
+    ],
+    "additionalProperties": false
+  },
+  "strict": true
+}
